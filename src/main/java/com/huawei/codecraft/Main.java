@@ -101,7 +101,9 @@ public class Main {
             int sts = scanf.nextInt();
         }
         for (int i = 0; i < 5; i++) {
-            boat[i] = new Boat();
+            if (boat[i] == null) {
+                boat[i] = new Boat();
+            }
             boat[i].status = scanf.nextInt();
             boat[i].pos = scanf.nextInt();
         }
@@ -150,6 +152,9 @@ public class Main {
      * @param robot 机器人
      */
     private void robot2Berth(Robot robot) {
+        if (inBerth(robot)) {
+            return;
+        }
         Random rand = new Random();
         int rx = robot.x, ry = robot.y;
         //遍历港口寻找最优路径
@@ -168,6 +173,19 @@ public class Main {
             }
         }
         markPath(robot);
+    }
+
+    private boolean inBerth(Robot robot) {
+        int rx = robot.x;
+        int ry = robot.y;
+        for (int i = 0; i < berth_num; i++) {
+            int x = berth[i].x;
+            int y = berth[i].y;
+            if (rx >= x && rx <= x + 3 && ry >= y && ry <= y + 3) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -608,14 +626,95 @@ public class Main {
         }
     }
 
-    private void boatPlan() {
+    private void boatPlan(int zhen, StringBuilder msg) {
         for (int i = 0; i < boat_num; i++) {
-            if (boat[i].pos!=-1 || boat[i].status==0){
-                //跳过非空闲轮船
-                continue;
+            if (boat[i].pos == -1 && boat[i].status == 1) {
+                //空闲轮船
+                int max = -1;
+                int max_idx = 0;
+                for (int j = 0; j < berth_num; j++) {
+                    if (!berth[j].free) {
+                        continue;
+                    }
+                    if (berth[j].goods_num > max) {
+                        max = berth[j].goods_num;
+                        max_idx = j;
+                    }
+                }
+                System.out.printf("ship %d %d" + System.lineSeparator(), i, max_idx);
+                berth[max_idx].free = false;
+            } else if (boat[i].pos != -1 && boat[i].status == 1) {
+                //轮船已经到达泊口
+                if (boat[i].arrived_time < 0) {
+                    boat[i].arrived_time = zhen;
+                }
+                int berth_id = boat[i].pos;
+                int time = zhen - boat[i].arrived_time;
+                int load_num = time * berth[berth_id].loading_speed;
+                int num = berth[berth_id].goods_num;
+                if (load_num >= num) {
+                    //货物装完，轮船走
+                    //余量较多，去别的泊位
+                    boat[i].remain_capacity -= num;
+                    if (boat[i].remain_capacity > 20) {
+                        int max = -1;
+                        int max_idx = -1;
+                        for (int j = 0; j < berth_num; j++) {
+                            if (!berth[j].free) {
+                                continue;
+                            }
+                            //挑选泊位
+                            int load_time = Math.min(berth[j].goods_num, boat[i].remain_capacity) / berth[j].loading_speed;
+                            if (zhen + 500 + berth[j].transport_time + load_time >= 15000) {
+                                //回不到虚拟点，放弃选择该泊位
+                                continue;
+                            }
+                            if (berth[j].goods_num > max) {
+                                max = berth[j].goods_num;
+                                max_idx = j;
+                            }
+                            if (max > boat[i].remain_capacity) {
+                                break;
+                            }
+                        }
+                        if (max_idx != -1) {
+                            //下一轮时间足够返回
+                            System.out.printf("ship %d %d" + System.lineSeparator(), i, max_idx);
+                            berth[max_idx].free = false;
+                        } else {
+                            //下一轮时间不够返回
+                            System.out.printf("go %d" + System.lineSeparator(), i);
+                        }
+                    } else {
+                        //余量较少，去虚拟点
+                        System.out.printf("go %d" + System.lineSeparator(), i);
+                    }
+                    berth[berth_id].goods_num = 0;
+                    berth[berth_id].free = true;
+                    boat[i].arrived_time = -1;
+                } else if (load_num > boat[i].remain_capacity) {
+                    //轮船满，轮船走
+                    System.out.printf("go %d" + System.lineSeparator(), i);
+                    berth[berth_id].goods_num = num - boat[i].remain_capacity;
+                    berth[berth_id].free = true;
+                    boat[i].arrived_time = -1;
+                    //重置轮船余量
+                    boat[i].remain_capacity = boat_capacity;
+                }
             }
-
+            //行驶中的轮船不做处理
         }
+        //测试
+//        if (zhen == 5001) {
+//            for (int i = 0; i < 10; i++) {
+//                msg.append("berth:" + i + "  loading_speed:" + berth[i].loading_speed + " goods_num" + berth[i].goods_num + "  transport_time" + berth[i].transport_time + "\n");
+//            }
+//            for (int i = 0; i < 5; i++) {
+//                msg.append("boat:" + i + "  pos" + boat[i].pos + "\n");
+//            }
+//            msg.append(boat_capacity + "\n");
+//            throw new RuntimeException(msg.toString());
+//        }
     }
 
 
@@ -641,51 +740,49 @@ public class Main {
             }
             int id = mainInstance.input();
             //机器人调度
-            if (zhen > 199) {
-                for (int i = 0; i < robot_num; i++) {
-                    if (!mainInstance.robots[i].path.isEmpty() && !Arrays.toString(mainInstance.robots[i].path.peek()).equals(fake_path)) {
-                        mainInstance.getRobotsCmd(mainInstance.robots[i], i);
-                    } else {
-                        if (!semaphore[i]) {
-                            continue;
-                        }
-                        semaphore[i] = false;
-                        int idx = i;
-                        //创建子进程，处理路径规划问题
-                        mainInstance.executor.execute(() -> {
-                            mainInstance.robotPlan(mainInstance.robots[idx]);
-                            semaphore[idx] = true;
-                        });
+            for (int i = 0; i < robot_num; i++) {
+                if (!mainInstance.robots[i].path.isEmpty() && !Arrays.toString(mainInstance.robots[i].path.peek()).equals(fake_path)) {
+                    mainInstance.getRobotsCmd(mainInstance.robots[i], i);
+                } else {
+                    if (!semaphore[i]) {
+                        continue;
                     }
+                    semaphore[i] = false;
+                    int idx = i;
+                    int z = zhen;
+                    //创建子进程，处理路径规划问题
+                    mainInstance.executor.execute(() -> {
+                        if (z < 200) {
+                            mainInstance.robot2Berth(mainInstance.robots[idx]);
+                        } else {
+                            mainInstance.robotPlan(mainInstance.robots[idx]);
+                        }
+                        semaphore[idx] = true;
+                    });
                 }
             }
+
             //轮船调度
-            if (zhen == 500 || zhen == 5900 || zhen == 11700) {
-                berth_idx = mainInstance.shipBoat();
-            }
-            if (zhen == 4200 || zhen == 10200 || zhen == 13400) {
-                mainInstance.goBoat(zhen, berth_idx);
-            }
-            if (zhen>500){
-                mainInstance.boatPlan();
+            if (zhen >= 5000) {
+                mainInstance.boatPlan(zhen, mainInstance.msg);
             }
 //            try {
-//                Thread.sleep(10);
+//                Thread.sleep(9);
 //            } catch (InterruptedException e) {
 //                throw new RuntimeException(e);
 //            }
             System.out.println("OK");
             System.out.flush();
             //测试：
-            if (zhen == 4201) {
-                for (int i = 0; i < 5; i++) {
-                    mainInstance.msg.append("boat");
-                    mainInstance.msg.append(i);
-                    mainInstance.msg.append(":");
-                    mainInstance.msg.append("  num:" + mainInstance.boat[i].num);
-                    mainInstance.msg.append("  pos:" + mainInstance.boat[i].pos);
-                    mainInstance.msg.append("  status:" + mainInstance.boat[i].status+"\n");
-                }
+            if (zhen == 5000) {
+//                for (int i = 0; i < 5; i++) {
+//                    mainInstance.msg.append("boat");
+//                    mainInstance.msg.append(i);
+//                    mainInstance.msg.append(":");
+//                    mainInstance.msg.append("  num:" + mainInstance.boat[i].num);
+//                    mainInstance.msg.append("  pos:" + mainInstance.boat[i].pos);
+//                    mainInstance.msg.append("  status:" + mainInstance.boat[i].status + "\n");
+//                }
                 throw new RuntimeException(mainInstance.msg.toString());
             }
         }
@@ -724,6 +821,8 @@ public class Main {
         int loading_speed;
         int goods_num;
 
+        boolean free;
+
 
         public Berth() {
         }
@@ -734,6 +833,7 @@ public class Main {
             this.transport_time = transport_time;
             this.loading_speed = loading_speed;
             this.goods_num = 0;
+            this.free = true;
         }
     }
 
@@ -749,6 +849,15 @@ public class Main {
          * <p> 2 表示泊位外等待状态
          */
         int status;
+
+        int arrived_time;
+        int remain_capacity;
+
+        public Boat() {
+            this.num = 0;
+            this.arrived_time = -1;
+            this.remain_capacity = boat_capacity;
+        }
     }
 
     class Good {
