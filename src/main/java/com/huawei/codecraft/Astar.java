@@ -68,7 +68,6 @@ public class Astar {
         //this.Exist.add(start);
         exist[sta[0]][sta[1]] = true;
         //主循环
-        long time = 0;
         while (!Open.isEmpty()) {
             //取优先队列顶部元素并且把这个元素从Open表中删除
             Node current_node = Open.poll();

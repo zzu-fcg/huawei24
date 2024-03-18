@@ -4,6 +4,7 @@
 
 package com.huawei.codecraft;
 
+import javax.lang.model.element.VariableElement;
 import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -116,7 +117,7 @@ public class Main {
      *
      * @param robot 机器人
      */
-    private void robot2Good(Robot robot) {
+    private void robot2Good(Robot robot, StringBuilder msg) {
         int min_dist = 200;
         int rx = robot.x, ry = robot.y;
         //todo 遍历货物寻找最优路径(优化：最有价值)
@@ -126,7 +127,15 @@ public class Main {
                 continue;
             }
             if (min_dist < 50) {
-                break;
+                Astar astar = new Astar(map, gds_map);
+                robot.path = astar.aStarSearchGood(new int[]{rx, ry}, new int[]{best.x, best.y}, msg);
+                //路径不空且时间足够到达，更新货物生存时间,并记录返回路径
+                if (!robot.path.isEmpty() && !Arrays.toString(robot.path.peek()).equals(fake_path) && best.left_time > robot.path.size()) {
+                    int[] end = robot.path.peekLast();
+                    gds_map[end[0]][end[1]] = false;
+                    markPath(robot);
+                }
+                return;
             }
             int dist = Math.abs(gd.x - rx) + Math.abs(gd.y - ry);
             if (dist < min_dist) {
@@ -134,12 +143,11 @@ public class Main {
                 best = gd;
             }
         }
-        if (best != null) {
+        if (best != null && robot.path.isEmpty()) {
             Astar astar = new Astar(map, gds_map);
             robot.path = astar.aStarSearchGood(new int[]{rx, ry}, new int[]{best.x, best.y}, msg);
         }
-        //更新货物生存时间,并记录返回路径
-        if (!robot.path.isEmpty() && !Arrays.toString(robot.path.peek()).equals(fake_path) && best != null) {
+        if (!robot.path.isEmpty() && !Arrays.toString(robot.path.peek()).equals(fake_path) && best.left_time > robot.path.size()) {
             int[] end = robot.path.peekLast();
             gds_map[end[0]][end[1]] = false;
             markPath(robot);
@@ -256,7 +264,7 @@ public class Main {
         return null;
     }
 
-    private void getRobotsCmd(Robot robot, int idx) {
+    private void getRobotsCmd(Robot robot, int idx, StringBuilder msg) {
         int[] up = {-1, 0};
         int[] down = {1, 0};
         int[] left = {0, -1};
@@ -265,6 +273,19 @@ public class Main {
         int[] now;
         if (path.size() > 1) {
             now = path.poll();
+//            if (gds_map[now[0]][now[1]] && robot.goods == 0) {
+//                //路途中提前找到货物
+//                System.out.printf("get %d" + System.lineSeparator(), idx);
+//                //清除剩余标记
+//                while (robot.path.size() > 1 && robot.path_mark.size() > 1) {
+//                    int[] point = robot.path.pollLast();
+//                    if (!robot.path_mark.isEmpty()) {
+//                        map[point[0]][point[1]] = robot.path_mark.pollLast();
+//                    }
+//                }
+//                robot.path.poll();
+//                return;
+//            }
             if (!robot.path_mark.isEmpty()) {
                 map[now[0]][now[1]] = robot.path_mark.poll();
             }
@@ -423,7 +444,7 @@ public class Main {
 //        if (!robot.arrived) {
         if (robot.goods == 0) {
             //取货路径规划
-            robot2Good(robot);
+            robot2Good(robot, msg);
         } else {
             //送货路径规划
             //if (!fake_path.equals(Arrays.toString(robot.path.peek())))
@@ -742,7 +763,7 @@ public class Main {
             //机器人调度
             for (int i = 0; i < robot_num; i++) {
                 if (!mainInstance.robots[i].path.isEmpty() && !Arrays.toString(mainInstance.robots[i].path.peek()).equals(fake_path)) {
-                    mainInstance.getRobotsCmd(mainInstance.robots[i], i);
+                    mainInstance.getRobotsCmd(mainInstance.robots[i], i, mainInstance.msg);
                 } else {
                     if (!semaphore[i]) {
                         continue;
@@ -774,7 +795,7 @@ public class Main {
             System.out.println("OK");
             System.out.flush();
             //测试：
-            if (zhen == 5000) {
+//            if (zhen == 14000) {
 //                for (int i = 0; i < 5; i++) {
 //                    mainInstance.msg.append("boat");
 //                    mainInstance.msg.append(i);
@@ -783,8 +804,8 @@ public class Main {
 //                    mainInstance.msg.append("  pos:" + mainInstance.boat[i].pos);
 //                    mainInstance.msg.append("  status:" + mainInstance.boat[i].status + "\n");
 //                }
-                throw new RuntimeException(mainInstance.msg.toString());
-            }
+//                throw new RuntimeException(mainInstance.msg.toString());
+//            }
         }
     }
 
