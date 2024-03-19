@@ -129,6 +129,8 @@ public class Main {
             if (min_dist < 50) {
                 Astar astar = new Astar(map, gds_map);
                 robot.path = astar.aStarSearchGood(new int[]{rx, ry}, new int[]{best.x, best.y}, msg);
+//                Bfs bfs = new Bfs(map, gds_map);
+//                robot.path = bfs.bfsSearchGood(new int[]{rx, ry}, new int[]{best.x, best.y});
                 //路径不空且时间足够到达，更新货物生存时间,并记录返回路径
                 if (!robot.path.isEmpty() && !Arrays.toString(robot.path.peek()).equals(fake_path) && best.left_time > robot.path.size()) {
                     int[] end = robot.path.peekLast();
@@ -143,9 +145,11 @@ public class Main {
                 best = gd;
             }
         }
-        if (best != null && robot.path.isEmpty()) {
+        if (best != null && (robot.path.isEmpty() || Arrays.toString(robot.path.peek()).equals(fake_path))) {
             Astar astar = new Astar(map, gds_map);
             robot.path = astar.aStarSearchGood(new int[]{rx, ry}, new int[]{best.x, best.y}, msg);
+//            Bfs bfs = new Bfs(map, gds_map);
+//            robot.path = bfs.bfsSearchGood(new int[]{rx, ry}, new int[]{best.x, best.y});
         }
         if (!robot.path.isEmpty() && !Arrays.toString(robot.path.peek()).equals(fake_path) && best.left_time > robot.path.size()) {
             int[] end = robot.path.peekLast();
@@ -197,7 +201,7 @@ public class Main {
     }
 
     /**
-     * 对机器人路径进行标记，使得a*规划路径时可以绕过已规划的路径，降低机器人碰撞概率
+     * 对机器人路径进行标记，使得路径规划时可以绕过已规划的路径，降低机器人碰撞概率
      *
      * @param robot
      */
@@ -213,55 +217,6 @@ public class Main {
             robot.path_mark.add(map[point[0]][point[1]]);
             map[point[0]][point[1]] = '^';
         }
-    }
-
-    /**
-     * bfs
-     *
-     * @param begin 起点坐标
-     * @param end   终点坐标
-     * @return 路径队列
-     */
-    public Queue<int[]> getPath(int[] begin, int[] end) {
-        //移动的四个方向
-        int[][] dirs = {{1, 0}, {0, 1}, {-1, 0}, {0, -1}};
-        //储存未进行处理的点
-        Queue<int[]> que = new LinkedList<int[]>();
-        Queue<int[]> path = new LinkedList<int[]>();
-        Map<String, int[]> father = new HashMap<String, int[]>();
-        //记录是否访问过该位置
-        boolean[][] visited = new boolean[n][n];
-        //将起始点放入队列
-        que.offer(begin);
-        //一直循环直到队列为空
-        while (!que.isEmpty()) {
-            //取出队列中最前端的点
-            int[] current = que.poll();
-            //标记为已访问
-            visited[current[0]][current[1]] = true;
-            //如果是终点,记录路径
-            if (current[0] == end[0] && current[1] == end[1]) {
-                while (current != null) {
-                    path.add(current);
-                    current = father.get(Arrays.toString(current));
-                }
-                Collections.reverse((List) path);
-                return path;
-            }
-            //四个方向循环
-            for (int[] dir : dirs) {
-                int nx = current[0] + dir[0];
-                int ny = current[1] + dir[1];
-                //判断是否可以走
-                if (ny >= 0 && ny < map[0].length && nx >= 0 && nx < map.length && map[nx][ny] == '.' && !visited[nx][ny]) {
-                    //并将该点放入队列等待下次处理
-                    que.offer(new int[]{nx, ny});
-                    //记录该点的父节点
-                    father.put(Arrays.toString(new int[]{nx, ny}), new int[]{current[0], current[1]});
-                }
-            }
-        }
-        return null;
     }
 
     private void getRobotsCmd(Robot robot, int idx, StringBuilder msg) {
@@ -322,78 +277,6 @@ public class Main {
                 }
             }
         }
-//        if (!robot.path.isEmpty()) {
-//            Queue<int[]> path = robot.path;
-//            int[] now;
-//            if (path.size() > 1) {
-//                now = path.poll();
-//                if (!robot.path_mark.isEmpty() && robot.back_path.isEmpty()) {
-//                    char c = robot.path_mark.poll();
-//                    if (!robot.arrived && c == 'B') {
-//                        robot.arrived = true;
-//                    }
-//                    map[now[0]][now[1]] = c;
-//                }
-//                int[] next = path.peek();
-//                if (next != null) {
-//                    int[] dir = {next[0] - now[0], next[1] - now[1]};
-//                    if (Arrays.equals(dir, right)) {
-//                        System.out.printf("move %d %d" + System.lineSeparator(), idx, 0);
-//                    } else if (Arrays.equals(dir, left)) {
-//                        System.out.printf("move %d %d" + System.lineSeparator(), idx, 1);
-//                    } else if (Arrays.equals(dir, up)) {
-//                        System.out.printf("move %d %d" + System.lineSeparator(), idx, 2);
-//                    } else if (Arrays.equals(dir, down)) {
-//                        System.out.printf("move %d %d" + System.lineSeparator(), idx, 3);
-//                    }
-//                }
-//            }
-//            if (path.size() == 1) {
-//                now = path.poll();
-//                if (!robot.path_mark.isEmpty() && robot.back_path.isEmpty()) {
-//                    char c = robot.path_mark.poll();
-//                    if (!robot.arrived && c == 'B') {
-//                        robot.arrived = true;
-//                    }
-//                    map[now[0]][now[1]] = c;
-//                }
-//                if (robot.goods == 0) { //无货取货
-//                    System.out.printf("get %d" + System.lineSeparator(), idx);
-//                } else { //有货卸货
-//                    System.out.printf("pull %d" + System.lineSeparator(), idx);
-//                }
-//            }
-//        } else if (!robot.back_path.isEmpty()) {
-//            Queue<int[]> path = robot.back_path;
-//            int[] now;
-//            if (path.size() > 1) {
-//                now = path.poll();
-//                if (!robot.path_mark.isEmpty()) {
-//                    map[now[0]][now[1]] = robot.path_mark.pollLast();
-//                }
-//                int[] next = path.peek();
-//                if (next != null) {
-//                    int[] dir = {next[0] - now[0], next[1] - now[1]};
-//                    if (Arrays.equals(dir, right)) {
-//                        System.out.printf("move %d %d" + System.lineSeparator(), idx, 0);
-//                    } else if (Arrays.equals(dir, left)) {
-//                        System.out.printf("move %d %d" + System.lineSeparator(), idx, 1);
-//                    } else if (Arrays.equals(dir, up)) {
-//                        System.out.printf("move %d %d" + System.lineSeparator(), idx, 2);
-//                    } else if (Arrays.equals(dir, down)) {
-//                        System.out.printf("move %d %d" + System.lineSeparator(), idx, 3);
-//                    }
-//                }
-//            }
-//            if (path.size() == 1) {
-//                now = path.poll();
-//                if (!robot.path_mark.isEmpty()) {
-//                    map[now[0]][now[1]] = robot.path_mark.pollLast();
-//                }
-//                //卸货
-//                System.out.printf("pull %d" + System.lineSeparator(), idx);
-//            }
-//        }
     }
 
     private int[] shipBoat() {
@@ -743,7 +626,6 @@ public class Main {
         Main mainInstance = new Main();
         mainInstance.init();
 
-        int[] berth_idx = new int[5];
         Arrays.fill(semaphore, true);
 
         for (int zhen = 1; zhen <= 15000; zhen++) {
@@ -795,14 +677,16 @@ public class Main {
             System.out.println("OK");
             System.out.flush();
             //测试：
-//            if (zhen == 14000) {
-//                for (int i = 0; i < 5; i++) {
-//                    mainInstance.msg.append("boat");
+//            if (zhen == 5000) {
+//                for (int i = 0; i < 10; i++) {
+//                    mainInstance.msg.append("robot");
 //                    mainInstance.msg.append(i);
 //                    mainInstance.msg.append(":");
-//                    mainInstance.msg.append("  num:" + mainInstance.boat[i].num);
-//                    mainInstance.msg.append("  pos:" + mainInstance.boat[i].pos);
-//                    mainInstance.msg.append("  status:" + mainInstance.boat[i].status + "\n");
+//                    for (int[] ints : mainInstance.robots[i].path) {
+//                        mainInstance.msg.append(Arrays.toString(ints) + "  ");
+//                    }
+//                    mainInstance.msg.append(" good:" + mainInstance.robots[i].goods);
+//                    mainInstance.msg.append("\n");
 //                }
 //                throw new RuntimeException(mainInstance.msg.toString());
 //            }

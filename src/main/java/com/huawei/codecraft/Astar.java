@@ -57,7 +57,6 @@ public class Astar {
     }
 
     public Deque<int[]> aStarSearchGood(int[] sta, int[] en, StringBuilder msg) {
-        long start_time = System.currentTimeMillis();
         //初始化结点
         Node start = new Node(sta[0], sta[1]);
         start.father = null;
@@ -78,11 +77,8 @@ public class Astar {
             //对这个结点遍历，看是否有目标结点出现
             //没有出现目标结点再看是否出现过
             for (Node node : neighbour_node) {
-                if (gds_map[node.x][node.y]) { //寻路过程中提前找到货物
-                    node.init_node(current_node, end);
-                    return nodeQueue(node);
-                }
-                if (node.x == end.x && node.y == end.y) {//找到目标结点就返回
+                //寻路过程中提前找到货物或找到目标结点
+                if (gds_map[node.x][node.y] || (node.x == end.x && node.y == end.y)) { //寻路过程中提前找到货物
                     node.init_node(current_node, end);
                     return nodeQueue(node);
                 }
@@ -92,10 +88,6 @@ public class Astar {
                     //Exist.add(node);
                     exist[node.x][node.y] = true;
                 }
-            }
-            long now_time = System.currentTimeMillis();
-            if (now_time-start_time>6){
-                break;
             }
         }
         //如果遍历完所有出现的结点都没有找到最终的结点，返回null

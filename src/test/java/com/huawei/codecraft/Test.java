@@ -2,9 +2,8 @@ package com.huawei.codecraft;
 
 
 import junit.framework.TestCase;
-import sun.text.resources.cldr.ti.FormatData_ti;
 
-import java.sql.SQLOutput;
+import java.io.*;
 import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -29,6 +28,38 @@ public class Test extends TestCase {
         Queue<int[]> q = astar.aStarSearchBerth(new int[]{8, 1}, new int[]{1, 8});
         q.forEach(ints -> System.out.println(Arrays.toString(ints)));
         //main.getPath(map,new int[]{0,0}, new int[]{4,4}).forEach(ints -> System.out.println(Arrays.toString(ints)));
+    }
+
+    public void test5() throws IOException {
+        char[][] map = new char[200][200];
+        File doc = new File("C:\\Users\\FCG\\Desktop\\map1.txt");
+        int i=0;
+        BufferedReader obj = new BufferedReader(new FileReader(doc));
+        String strng;
+        while ((strng = obj.readLine()) != null) {
+            map[i++] = strng.toCharArray();
+        }
+//        char[][] map = {
+//                {'*', '*', '*', '*', '*', '*', '*', '*', '*', '*',},
+//                {'#', '.', '.', '.', '.', '.', '.', '.', '.', '#'},
+//                {'#', '.', '.', '.', '.', '#', '.', '.', '.', '#'},
+//                {'#', '.', '.', '.', '#', '.', '.', '.', '.', '#'},
+//                {'#', '.', '.', '.', '#', '.', '.', '.', '.', '#'},
+//                {'#', '.', '.', '.', '.', '#', '.', '.', '.', '#'},
+//                {'#', '.', '.', '.', '#', '.', '.', '.', '.', '#'},
+//                {'#', '.', '.', '.', '.', '#', '.', '.', '.', '#'},
+//                {'#', '.', '.', '.', '.', '.', '.', '.', '.', '#'},
+//                {'#', '*', '*', '*', '*', '*', '*', '*', '*', '#'}
+//        };
+        boolean[][] gds_map = new boolean[200][200];
+        Bfs bfs = new Bfs(map,gds_map);
+        Astar astar = new Astar(map);
+        long l = System.currentTimeMillis();
+//        Queue<int[]> q = astar.aStarSearchBerth(new int[]{103, 93}, new int[]{4, 195});
+        Queue<int[]> q = bfs.bfsSearchGood(new int[]{103, 93}, new int[]{4, 195});
+        long e = System.currentTimeMillis();
+        q.forEach(ints -> System.out.println(Arrays.toString(ints)));
+        System.out.println(e-l);
     }
 
     public void test2() {
