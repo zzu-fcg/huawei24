@@ -697,29 +697,41 @@ public class Main {
                 }
             }
             int id = mainInstance.input();
-            //机器人调度
+            //机器人调度,多线程
+//            for (int i = 0; i < robot_num; i++) {
+//                if (!mainInstance.robots[i].path.isEmpty()) {
+//                    mainInstance.getRobotsCmd(mainInstance.robots[i], i, mainInstance.msg);
+//                } else {
+//                    if (!semaphore[i]) {
+//                        continue;
+//                    }
+//                    semaphore[i] = false;
+//                    int idx = i;
+//                    int z = zhen;
+//                    //创建子进程，处理路径规划问题
+//                    mainInstance.executor.execute(() -> {
+//                        if (z < 200) {
+//                            mainInstance.robot2Berth(mainInstance.robots[idx]);
+//                        } else {
+//                            mainInstance.robotPlan(mainInstance.robots[idx], mainInstance.msg);
+//                        }
+//                        semaphore[idx] = true;
+//                    });
+//                }
+//            }
+            //机器人调度,单线程
             for (int i = 0; i < robot_num; i++) {
-                if (!mainInstance.robots[i].path.isEmpty()) {
-                    mainInstance.getRobotsCmd(mainInstance.robots[i], i, mainInstance.msg);
-                } else {
-                    if (!semaphore[i]) {
-                        continue;
+                if (mainInstance.robots[i].path.isEmpty()) {
+                    if (zhen < 200) {
+                        mainInstance.robot2Berth(mainInstance.robots[i]);
+                    } else {
+                        mainInstance.robotPlan(mainInstance.robots[i], mainInstance.msg);
                     }
-                    semaphore[i] = false;
-                    int idx = i;
-                    int z = zhen;
-                    //创建子进程，处理路径规划问题
-                    mainInstance.executor.execute(() -> {
-                        if (z < 200) {
-                            mainInstance.robot2Berth(mainInstance.robots[idx]);
-                        } else {
-                            mainInstance.robotPlan(mainInstance.robots[idx], mainInstance.msg);
-                        }
-                        semaphore[idx] = true;
-                    });
+                }
+                if (!mainInstance.robots[i].path.isEmpty()){
+                    mainInstance.getRobotsCmd(mainInstance.robots[i], i, mainInstance.msg);
                 }
             }
-
             //轮船调度
             if (zhen >= 1000) {
                 mainInstance.boatPlan(zhen, mainInstance.msg);
