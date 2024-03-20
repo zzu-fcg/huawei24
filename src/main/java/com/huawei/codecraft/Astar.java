@@ -56,7 +56,7 @@ public class Astar {
         this.gds_map = gds_map;
     }
 
-    public Deque<int[]> aStarSearchGood(int[] sta, int[] en, StringBuilder msg) {
+    public Deque<int[]> aStarSearchGoodEarlyStop(int[] sta, int[] en, StringBuilder msg) {
         //初始化结点
         Node start = new Node(sta[0], sta[1]);
         start.father = null;
@@ -90,10 +90,49 @@ public class Astar {
                 }
             }
         }
-        //如果遍历完所有出现的结点都没有找到最终的结点，返回null
-        Deque<int[]> fake_path = new LinkedList<>();
-        fake_path.add(new int[]{-1, -1});
-        return fake_path;
+        //如果遍历完所有出现的结点都没有找到最终的结点，返回empty
+//        Deque<int[]> fake_path = new LinkedList<>();
+//        fake_path.add(new int[]{-1, -1});
+        return new LinkedList<>();
+    }
+    public Deque<int[]> aStarSearchGood(int[] sta, int[] en, StringBuilder msg) {
+        //初始化结点
+        Node start = new Node(sta[0], sta[1]);
+        start.father = null;
+        Node end = new Node(en[0], en[1]);
+        //把第一个开始的结点加入到Open表中
+        this.Open.add(start);
+        //把出现过的结点加入到Exist表中
+        //this.Exist.add(start);
+        exist[sta[0]][sta[1]] = true;
+        //主循环
+        while (!Open.isEmpty()) {
+            //取优先队列顶部元素并且把这个元素从Open表中删除
+            Node current_node = Open.poll();
+            //将这个结点加入到Close表中
+            Close.add(current_node);
+            //对当前结点进行扩展，得到一个四周结点的数组
+            ArrayList<Node> neighbour_node = extend_current_node(current_node);
+            //对这个结点遍历，看是否有目标结点出现
+            //没有出现目标结点再看是否出现过
+            for (Node node : neighbour_node) {
+                //找到目标结点
+                if (node.x == end.x && node.y == end.y) {
+                    node.init_node(current_node, end);
+                    return nodeQueue(node);
+                }
+                if (!is_exist(node)) {  //没出现过的结点加入到Open表中并且设置父节点
+                    node.init_node(current_node, end);
+                    Open.add(node);
+                    //Exist.add(node);
+                    exist[node.x][node.y] = true;
+                }
+            }
+        }
+        //如果遍历完所有出现的结点都没有找到最终的结点，返回empty
+//        Deque<int[]> fake_path = new LinkedList<>();
+//        fake_path.add(new int[]{-1, -1});
+        return new LinkedList<>();
     }
 
     public Deque<int[]> aStarSearchBerth(int[] sta, int[] en) {
@@ -132,9 +171,7 @@ public class Astar {
             }
         }
         //如果遍历完所有出现的结点都没有找到最终的结点，返回null
-        Deque<int[]> fake_path = new LinkedList<>();
-        fake_path.add(new int[]{-1, -1});
-        return fake_path;
+        return new LinkedList<>();
     }
 
     Deque<int[]> nodeQueue(Node node) {

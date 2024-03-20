@@ -4,7 +4,8 @@
 
 package com.huawei.codecraft;
 
-import javax.lang.model.element.VariableElement;
+import sun.nio.cs.ext.MS874;
+
 import java.util.*;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -19,8 +20,10 @@ public class Main {
     private static final int robot_num = 10;
     private static final int berth_num = 10;
     private static final int boat_num = 5;
+    private static final int step_size = 5;
     private static final int N = 210;
     private static final String fake_path = "[-1, -1]";
+    private static final int[] fake_goal = {-1, -1};
 
     private int money, boat_capacity, id;
     private String[] ch = new String[N];
@@ -31,8 +34,8 @@ public class Main {
      * ‘A’ ： 机器人起始位置，总共 10 个 <p>
      * ‘B’ ： 大小为 4*4，表示泊位的位置,泊位标号在后泊位处初始化
      */
-    private char[][] map = new char[N][N];
-    private boolean[][] gds_map = new boolean[N][N];
+    private char[][] map = new char[n][n];
+    private boolean[][] gds_map = new boolean[n][n];
     private List<Good> gds = new LinkedList<>(); //ArrayList or LinkedList
     private Robot[] robots = new Robot[robot_num + 10];
     private Berth[] berth = new Berth[berth_num + 10];
@@ -48,7 +51,7 @@ public class Main {
     /**
      * 固定大小线程池
      */
-    private ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(2);
+    private ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(1);
 
     private void init() {
         Scanner scanf = new Scanner(System.in);
@@ -120,40 +123,84 @@ public class Main {
     private void robot2Good(Robot robot, StringBuilder msg) {
         int min_dist = 200;
         int rx = robot.x, ry = robot.y;
+        Deque<int[]> path = new LinkedList<>();
+        Deque<int[]> goal_path = new LinkedList<>();
         //todo 遍历货物寻找最优路径(优化：最有价值)
         Good best = null;
         for (Good gd : gds) {
             if (!gds_map[gd.x][gd.y]) {
                 continue;
             }
-            if (min_dist < 50) {
+            if (Arrays.equals(robot.goal, fake_goal) && min_dist < 50) {
                 Astar astar = new Astar(map, gds_map);
-                robot.path = astar.aStarSearchGood(new int[]{rx, ry}, new int[]{best.x, best.y}, msg);
+                path = astar.aStarSearchGoodEarlyStop(new int[]{rx, ry}, new int[]{best.x, best.y}, msg);
 //                Bfs bfs = new Bfs(map, gds_map);
 //                robot.path = bfs.bfsSearchGood(new int[]{rx, ry}, new int[]{best.x, best.y});
                 //路径不空且时间足够到达，更新货物生存时间,并记录返回路径
-                if (!robot.path.isEmpty() && !Arrays.toString(robot.path.peek()).equals(fake_path) && best.left_time > robot.path.size()) {
-                    int[] end = robot.path.peekLast();
+                if (!path.isEmpty() && best.left_time > path.size()) {
+                    int[] end = path.peekLast();
                     gds_map[end[0]][end[1]] = false;
+                    robot.goal = end;
+                    robot.goal_dist = path.size() - 1;
+                    for (int i = 0; i < step_size; i++) {
+                        if (!path.isEmpty())
+                            robot.path.addLast(path.pollFirst());
+                    }
                     markPath(robot);
+                    return;
                 }
-                return;
             }
             int dist = Math.abs(gd.x - rx) + Math.abs(gd.y - ry);
-            if (dist < min_dist) {
+            if (dist < min_dist && dist < robot.goal_dist) {
                 min_dist = dist;
                 best = gd;
             }
         }
-        if (best != null && (robot.path.isEmpty() || Arrays.toString(robot.path.peek()).equals(fake_path))) {
-            Astar astar = new Astar(map, gds_map);
-            robot.path = astar.aStarSearchGood(new int[]{rx, ry}, new int[]{best.x, best.y}, msg);
-//            Bfs bfs = new Bfs(map, gds_map);
-//            robot.path = bfs.bfsSearchGood(new int[]{rx, ry}, new int[]{best.x, best.y});
-        }
-        if (!robot.path.isEmpty() && !Arrays.toString(robot.path.peek()).equals(fake_path) && best.left_time > robot.path.size()) {
-            int[] end = robot.path.peekLast();
-            gds_map[end[0]][end[1]] = false;
+        Astar astar = new Astar(map, gds_map);
+        /**
+         *有目标、找到best
+         *无目标、找到best
+         *有目标、无best
+         *无目标、无best
+         */
+        if (!Arrays.equals(robot.goal, fake_goal) && best != null) {
+            path = astar.aStarSearchGood(new int[]{rx, ry}, new int[]{best.x, best.y}, msg);
+            goal_path = astar.aStarSearchGood(new int[]{rx, ry}, new int[]{robot.goal[0], robot.goal[1]}, msg);
+            if (!path.isEmpty() && path.size() < goal_path.size()) {
+                //更新目标
+                int[] end = path.peekLast();
+                gds_map[robot.goal[0]][robot.goal[1]] = true;
+                gds_map[end[0]][end[1]] = false;
+                robot.goal = end;
+                goal_path = path;
+            }
+            robot.goal_dist = goal_path.size() - 1;
+            for (int i = 0; i < step_size; i++) {
+                if (!goal_path.isEmpty())
+                    robot.path.addLast(goal_path.pollFirst());
+            }
+            markPath(robot);
+        } else if (Arrays.equals(robot.goal, fake_goal) && best != null) {
+            path = astar.aStarSearchGoodEarlyStop(new int[]{rx, ry}, new int[]{best.x, best.y}, msg);
+            if (!path.isEmpty()) {
+                //更新目标
+                int[] end = path.peekLast();
+                gds_map[end[0]][end[1]] = false;
+                robot.goal = end;
+                robot.goal_dist = path.size() - 1;
+                for (int i = 0; i < step_size; i++) {
+                    if (!path.isEmpty())
+                        robot.path.addLast(path.pollFirst());
+                }
+                markPath(robot);
+            }
+        } else if (!Arrays.equals(robot.goal, fake_goal) && best == null) {
+            goal_path = astar.aStarSearchGood(new int[]{rx, ry}, new int[]{robot.goal[0], robot.goal[1]}, msg);
+            robot.goal_dist = goal_path.size() - 1;
+            for (int i = 0; i < step_size; i++) {
+                if (!goal_path.isEmpty())
+                    robot.path.addLast(goal_path.pollFirst());
+            }
             markPath(robot);
         }
     }
@@ -164,9 +211,10 @@ public class Main {
      * @param robot 机器人
      */
     private void robot2Berth(Robot robot) {
-        if (inBerth(robot)) {
+        if (inBerth(robot) > -1) {
             return;
         }
+        Deque<int[]> path = new LinkedList<>();
         Random rand = new Random();
         int rx = robot.x, ry = robot.y;
         //遍历港口寻找最优路径
@@ -179,25 +227,40 @@ public class Main {
             int[] pair = dist_que.poll();
             int num = pair[0];
             Astar astar = new Astar(map);
-            robot.path = astar.aStarSearchBerth(new int[]{rx, ry}, new int[]{berth[num].x + rand.nextInt(4), berth[num].y + rand.nextInt(4)});
-            if (robot.path != null && !fake_path.equals(Arrays.toString(robot.path.peek()))) {
+            path = astar.aStarSearchBerth(new int[]{rx, ry}, new int[]{berth[num].x + rand.nextInt(4), berth[num].y + rand.nextInt(4)});
+            if (!path.isEmpty()) {
+                for (int i = 0; i < 5; i++) {
+                    if (!path.isEmpty())
+                        robot.path.addLast(path.pollFirst());
+                }
                 break;
             }
         }
         markPath(robot);
     }
 
-    private boolean inBerth(Robot robot) {
+    private int inBerth(Robot robot) {
         int rx = robot.x;
         int ry = robot.y;
         for (int i = 0; i < berth_num; i++) {
             int x = berth[i].x;
             int y = berth[i].y;
             if (rx >= x && rx <= x + 3 && ry >= y && ry <= y + 3) {
-                return true;
+                return i;
             }
         }
-        return false;
+        return -1;
+    }
+
+    private int inBerth(int rx, int ry) {
+        for (int i = 0; i < berth_num; i++) {
+            int x = berth[i].x;
+            int y = berth[i].y;
+            if (rx >= x && rx <= x + 3 && ry >= y && ry <= y + 3) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     /**
@@ -206,7 +269,7 @@ public class Main {
      * @param robot
      */
     private void markPath(Robot robot) {
-        if (robot.path == null || fake_path.equals(Arrays.toString(robot.path.peek()))) {
+        if (robot.path.isEmpty()) {
             return;
         }
         if (!robot.path_mark.isEmpty()) {
@@ -256,24 +319,24 @@ public class Main {
                 } else if (Arrays.equals(dir, down)) {
                     System.out.printf("move %d %d" + System.lineSeparator(), idx, 3);
                 }
+                if (robot.goal_dist != 300) {
+                    robot.goal_dist--;
+                }
             }
         }
         if (path.size() == 1) {
             now = path.poll();
-//            if (!robot.path_mark.isEmpty()) {
-//                map[now[0]][now[1]] = robot.path_mark.poll();
-//            }
-            if (robot.goods == 0) { //无货取货
+            if (robot.goods == 0 && robot.goal_dist == 0) { //无货取货
                 System.out.printf("get %d" + System.lineSeparator(), idx);
+                gds_map[now[0]][now[1]] = false;
+                robot.goal = fake_goal;
+                robot.goal_dist = 300;
+
             } else { //有货卸货
-                System.out.printf("pull %d" + System.lineSeparator(), idx);
-                for (int i = 0; i < berth_num; i++) {
-                    int x = berth[i].x;
-                    int y = berth[i].y;
-                    if (now[0] >= x && now[0] <= x + 3 && now[1] >= y && now[1] <= y + 3) {
-                        berth[i].goods_num++;
-                        break;
-                    }
+                int id = inBerth(now[0], now[1]);
+                if (id > -1) {
+                    System.out.printf("pull %d" + System.lineSeparator(), idx);
+                    berth[id].goods_num++;
                 }
             }
         }
@@ -323,22 +386,14 @@ public class Main {
      *
      * @param robot 机器人
      */
-    private void robotPlan(Robot robot) {
-//        if (!robot.arrived) {
+    private void robotPlan(Robot robot, StringBuilder msg) {
         if (robot.goods == 0) {
             //取货路径规划
             robot2Good(robot, msg);
         } else {
             //送货路径规划
-            //if (!fake_path.equals(Arrays.toString(robot.path.peek())))
             robot2Berth(robot);
         }
-//        } else {
-//            if (robot.goods == 0) {
-//                //取货路径规划,并且原路返回港口
-//                robot2Good(robot);
-//            }
-//        }
     }
 
     private void collision_avoidance() {
@@ -355,7 +410,7 @@ public class Main {
         List<List<int[]>> points = new ArrayList<>();
         List<Integer> idxs = new ArrayList<>();
         for (int i = 0; i < robot_num; i++) {
-            if (robots[i].path.isEmpty() || fake_path.equals(Arrays.toString(robots[i].path.peek()))) {
+            if (robots[i].path.isEmpty()) {
                 continue;
             }
             List<int[]> p = new ArrayList<>();
@@ -480,7 +535,7 @@ public class Main {
         List<List<int[]>> points = new ArrayList<>();
         List<Integer> idxs = new ArrayList<>();
         for (int i = 0; i < robot_num; i++) {
-            if (robots[i].path.isEmpty() || !fake_path.equals(Arrays.toString(robots[i].path.peek()))) {
+            if (robots[i].path.isEmpty()) {
                 continue;
             }
             List<int[]> p = new ArrayList<>();
@@ -644,7 +699,7 @@ public class Main {
             int id = mainInstance.input();
             //机器人调度
             for (int i = 0; i < robot_num; i++) {
-                if (!mainInstance.robots[i].path.isEmpty() && !Arrays.toString(mainInstance.robots[i].path.peek()).equals(fake_path)) {
+                if (!mainInstance.robots[i].path.isEmpty()) {
                     mainInstance.getRobotsCmd(mainInstance.robots[i], i, mainInstance.msg);
                 } else {
                     if (!semaphore[i]) {
@@ -658,7 +713,7 @@ public class Main {
                         if (z < 200) {
                             mainInstance.robot2Berth(mainInstance.robots[idx]);
                         } else {
-                            mainInstance.robotPlan(mainInstance.robots[idx]);
+                            mainInstance.robotPlan(mainInstance.robots[idx], mainInstance.msg);
                         }
                         semaphore[idx] = true;
                     });
@@ -666,11 +721,11 @@ public class Main {
             }
 
             //轮船调度
-            if (zhen >= 5000) {
+            if (zhen >= 1000) {
                 mainInstance.boatPlan(zhen, mainInstance.msg);
             }
 //            try {
-//                Thread.sleep(9);
+//                Thread.sleep(10);
 //            } catch (InterruptedException e) {
 //                throw new RuntimeException(e);
 //            }
@@ -678,16 +733,6 @@ public class Main {
             System.out.flush();
             //测试：
 //            if (zhen == 5000) {
-//                for (int i = 0; i < 10; i++) {
-//                    mainInstance.msg.append("robot");
-//                    mainInstance.msg.append(i);
-//                    mainInstance.msg.append(":");
-//                    for (int[] ints : mainInstance.robots[i].path) {
-//                        mainInstance.msg.append(Arrays.toString(ints) + "  ");
-//                    }
-//                    mainInstance.msg.append(" good:" + mainInstance.robots[i].goods);
-//                    mainInstance.msg.append("\n");
-//                }
 //                throw new RuntimeException(mainInstance.msg.toString());
 //            }
         }
@@ -704,10 +749,15 @@ public class Main {
 
         Deque<Character> path_mark;
 
+        int[] goal;
+        int goal_dist;
+
         public Robot() {
             this.path = new LinkedList<>();
             this.back_path = new LinkedList<>();
             this.path_mark = new LinkedList<>();
+            this.goal = new int[]{-1, -1};
+            this.goal_dist = 300;
         }
 
         public Robot(int startX, int startY) {
