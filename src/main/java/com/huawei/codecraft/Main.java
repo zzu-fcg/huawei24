@@ -20,7 +20,7 @@ public class Main {
     private static final int robot_num = 10;
     private static final int berth_num = 10;
     private static final int boat_num = 5;
-    private static final int step_size = 5;
+    private static final int step_size = 8;
     private static final int N = 210;
     private static final String fake_path = "[-1, -1]";
     private static final int[] fake_goal = {-1, -1};
@@ -36,6 +36,7 @@ public class Main {
      */
     private char[][] map = new char[n][n];
     private boolean[][] gds_map = new boolean[n][n];
+    private Good[][] gds_entity = new Good[n][n];
     private List<Good> gds = new LinkedList<>(); //ArrayList or LinkedList
     private Robot[] robots = new Robot[robot_num + 10];
     private Berth[] berth = new Berth[berth_num + 10];
@@ -92,8 +93,10 @@ public class Main {
             int x = scanf.nextInt();
             int y = scanf.nextInt();
             int val = scanf.nextInt();
-            gds.add(new Good(x, y, val));
+            Good gd = new Good(x, y, val);
+            gds.add(gd);
             gds_map[x][y] = true;
+            gds_entity[x][y] = gd;
         }
         for (int i = 0; i < robot_num; i++) {
             if (robots[i] == null) {
@@ -121,6 +124,7 @@ public class Main {
      * @param robot 机器人
      */
     private void robot2Good(Robot robot, StringBuilder msg) {
+        Random rand = new Random();
         int min_dist = 200;
         int rx = robot.x, ry = robot.y;
         Deque<int[]> path = new LinkedList<>();
@@ -142,7 +146,7 @@ public class Main {
                     gds_map[end[0]][end[1]] = false;
                     robot.goal = end;
                     robot.goal_dist = path.size() - 1;
-                    for (int i = 0; i < step_size; i++) {
+                    for (int i = 0; i < step_size + rand.nextInt(5); i++) {
                         if (!path.isEmpty())
                             robot.path.addLast(path.pollFirst());
                     }
@@ -157,6 +161,7 @@ public class Main {
             }
         }
         Astar astar = new Astar(map, gds_map);
+        Bfs bfs = new Bfs(map, gds_map);
         /**
          *有目标、找到best
          *无目标、找到best
@@ -164,8 +169,10 @@ public class Main {
          *无目标、无best
          */
         if (!Arrays.equals(robot.goal, fake_goal) && best != null) {
-            path = astar.aStarSearchGood(new int[]{rx, ry}, new int[]{best.x, best.y}, msg);
-            goal_path = astar.aStarSearchGood(new int[]{rx, ry}, new int[]{robot.goal[0], robot.goal[1]}, msg);
+//            path = astar.aStarSearchGood(new int[]{rx, ry}, new int[]{best.x, best.y}, msg);
+//            goal_path = astar.aStarSearchGood(new int[]{rx, ry}, new int[]{robot.goal[0], robot.goal[1]}, msg);
+            path = bfs.bfsSearchGood(new int[]{rx, ry}, new int[]{best.x, best.y});
+            goal_path = bfs.bfsSearchGood(new int[]{rx, ry}, new int[]{robot.goal[0], robot.goal[1]});
             if (!path.isEmpty() && path.size() < goal_path.size()) {
                 //更新目标
                 int[] end = path.peekLast();
@@ -175,7 +182,7 @@ public class Main {
                 goal_path = path;
             }
             robot.goal_dist = goal_path.size() - 1;
-            for (int i = 0; i < step_size; i++) {
+            for (int i = 0; i < step_size + rand.nextInt(5); i++) {
                 if (!goal_path.isEmpty())
                     robot.path.addLast(goal_path.pollFirst());
             }
@@ -188,16 +195,17 @@ public class Main {
                 gds_map[end[0]][end[1]] = false;
                 robot.goal = end;
                 robot.goal_dist = path.size() - 1;
-                for (int i = 0; i < step_size; i++) {
+                for (int i = 0; i < step_size + rand.nextInt(5); i++) {
                     if (!path.isEmpty())
                         robot.path.addLast(path.pollFirst());
                 }
                 markPath(robot);
             }
         } else if (!Arrays.equals(robot.goal, fake_goal) && best == null) {
-            goal_path = astar.aStarSearchGood(new int[]{rx, ry}, new int[]{robot.goal[0], robot.goal[1]}, msg);
+            //goal_path = astar.aStarSearchGood(new int[]{rx, ry}, new int[]{robot.goal[0], robot.goal[1]}, msg);
+            goal_path = bfs.bfsSearchGood(new int[]{rx, ry}, new int[]{robot.goal[0], robot.goal[1]});
             robot.goal_dist = goal_path.size() - 1;
-            for (int i = 0; i < step_size; i++) {
+            for (int i = 0; i < step_size + rand.nextInt(5); i++) {
                 if (!goal_path.isEmpty())
                     robot.path.addLast(goal_path.pollFirst());
             }
@@ -215,25 +223,35 @@ public class Main {
             return;
         }
         Deque<int[]> path = new LinkedList<>();
-        Random rand = new Random();
         int rx = robot.x, ry = robot.y;
-        //遍历港口寻找最优路径
-        Queue<int[]> dist_que = new PriorityQueue<int[]>(Comparator.comparingInt(e -> e[1]));
-        for (int j = 0; j < berth_num; j++) {
-            int dist = Math.abs(berth[j].x - rx) + Math.abs(berth[j].y - ry);
-            dist_que.add(new int[]{j, dist});
-        }
-        while (!dist_que.isEmpty()) {
-            int[] pair = dist_que.poll();
-            int num = pair[0];
-            Astar astar = new Astar(map);
-            path = astar.aStarSearchBerth(new int[]{rx, ry}, new int[]{berth[num].x + rand.nextInt(4), berth[num].y + rand.nextInt(4)});
-            if (!path.isEmpty()) {
-                for (int i = 0; i < 5; i++) {
-                    if (!path.isEmpty())
-                        robot.path.addLast(path.pollFirst());
+        if (Arrays.equals(robot.goal, fake_goal)) {
+            Random rand = new Random();
+            //遍历港口寻找最优路径
+            Queue<int[]> dist_que = new PriorityQueue<int[]>(Comparator.comparingInt(e -> e[1]));
+            for (int j = 0; j < berth_num; j++) {
+                int dist = Math.abs(berth[j].x - rx) + Math.abs(berth[j].y - ry);
+                dist_que.add(new int[]{j, dist});
+            }
+            while (!dist_que.isEmpty()) {
+                int[] pair = dist_que.poll();
+                int num = pair[0];
+//            Astar astar = new Astar(map);
+//            path = astar.aStarSearchBerth(new int[]{rx, ry}, new int[]{berth[num].x + rand.nextInt(4), berth[num].y + rand.nextInt(4)});
+                Bfs bfs = new Bfs(map);
+                path = bfs.bfsSearchBerthEarlyStop(new int[]{rx, ry}, new int[]{berth[num].x + rand.nextInt(4), berth[num].y + rand.nextInt(4)});
+                if (!path.isEmpty()) {
+                    break;
                 }
-                break;
+            }
+        } else {
+            Bfs bfs = new Bfs(map);
+            path = bfs.bfsSearchBerthEarlyStop(new int[]{rx, ry}, new int[]{robot.goal[0], robot.goal[1]});
+        }
+        if (!path.isEmpty()) {
+            robot.goal = path.peekLast();
+            for (int i = 0; i < 5; i++) {
+                if (!path.isEmpty())
+                    robot.path.addLast(path.pollFirst());
             }
         }
         markPath(robot);
@@ -331,12 +349,16 @@ public class Main {
                 gds_map[now[0]][now[1]] = false;
                 robot.goal = fake_goal;
                 robot.goal_dist = 300;
-
+                robot.carry = gds_entity[now[0]][now[1]];
             } else { //有货卸货
                 int id = inBerth(now[0], now[1]);
-                if (id > -1) {
+                if (id > -1 && robot.goods == 1) {
                     System.out.printf("pull %d" + System.lineSeparator(), idx);
                     berth[id].goods_num++;
+                    berth[id].gds.add(robot.carry);
+                    berth[id].total_val += robot.carry.val;
+                    robot.goal = fake_goal;
+                    robot.carry = null;
                 }
             }
         }
@@ -396,195 +418,6 @@ public class Main {
         }
     }
 
-    private void collision_avoidance() {
-        /**
-         * 1.取出前俩点
-         * 2.判断是否碰撞
-         * 3.检测后路径插入
-         */
-        int[] up = {-1, 0};
-        int[] down = {1, 0};
-        int[] left = {0, -1};
-        int[] right = {0, 1};
-        int[] stay = {0, 0};
-        List<List<int[]>> points = new ArrayList<>();
-        List<Integer> idxs = new ArrayList<>();
-        for (int i = 0; i < robot_num; i++) {
-            if (robots[i].path.isEmpty()) {
-                continue;
-            }
-            List<int[]> p = new ArrayList<>();
-            p.add(robots[i].path.pollFirst());
-            p.add(robots[i].path.pollFirst());
-            points.add(p);
-            idxs.add(i);
-        }
-
-        int length = points.size();
-        for (int i = 1; i < length; i++) {
-            List<int[]> robot_i_points = points.get(i);
-            int[] robot_i_point = robot_i_points.get(1);
-            for (int j = 0; j < i; j++) {
-                List<int[]> robot_j_points = points.get(i);
-                int[] avoid_point = robot_j_points.get(1);
-                if (avoid_point[0] == robot_i_point[0] && avoid_point[1] == robot_i_point[1]) {
-                    int x = robot_i_points.get(0)[0];
-                    int y = robot_i_points.get(0)[1];
-                    int[] dir = new int[]{robot_i_point[0] - x, robot_i_point[1] - y};
-                    try {
-                        if (Arrays.equals(dir, up)) {
-                            if (0 <= y - 1 && map[x][y - 1] != '#' && map[x][y - 1] != '*') {
-                                robot_i_points.add(1, new int[]{x, y});
-                                robot_i_points.add(1, new int[]{x, y - 1});
-                                robot_i_points.add(1, new int[]{x, y - 1});
-                            } else if (y + 1 < 200 && map[x][y + 1] != '#' && map[x][y + 1] != '*') {
-                                robot_i_points.add(1, new int[]{x, y});
-                                robot_i_points.add(1, new int[]{x, y + 1});
-                                robot_i_points.add(1, new int[]{x, y + 1});
-                            } else {
-                                robot_i_points.add(1, new int[]{x, y});
-                                robot_i_points.add(1, new int[]{x + 1, y});
-                                robot_i_points.add(1, new int[]{x + 1, y});
-                            }
-                        } else if (Arrays.equals(dir, down)) {
-                            if (y + 1 < 200 && map[x][y + 1] != '#' && map[x][y + 1] != '*') {
-                                robot_i_points.add(1, new int[]{x, y});
-                                robot_i_points.add(1, new int[]{x, y + 1});
-                                robot_i_points.add(1, new int[]{x, y + 1});
-                            } else if (0 <= y - 1 && map[x][y - 1] != '#' && map[x][y - 1] != '*') {
-                                robot_i_points.add(1, new int[]{x, y});
-                                robot_i_points.add(1, new int[]{x, y - 1});
-                                robot_i_points.add(1, new int[]{x, y - 1});
-                            } else {
-                                robot_i_points.add(1, new int[]{x, y});
-                                robot_i_points.add(1, new int[]{x - 1, y});
-                                robot_i_points.add(1, new int[]{x - 1, y});
-                            }
-                        } else if (Arrays.equals(dir, left)) {
-                            if (x + 1 < 200 && map[x + 1][y] != '#' && map[x + 1][y] != '*') {
-                                robot_i_points.add(1, new int[]{x, y});
-                                robot_i_points.add(1, new int[]{x + 1, y});
-                                robot_i_points.add(1, new int[]{x + 1, y});
-                            } else if (0 <= x - 1 && map[x - 1][y] != '#' && map[x - 1][y] != '*') {
-                                robot_i_points.add(1, new int[]{x, y});
-                                robot_i_points.add(1, new int[]{x - 1, y});
-                                robot_i_points.add(1, new int[]{x - 1, y});
-                            } else {
-                                robot_i_points.add(1, new int[]{x, y});
-                                robot_i_points.add(1, new int[]{x, y + 1});
-                                robot_i_points.add(1, new int[]{x, y + 1});
-                            }
-                        } else if (Arrays.equals(dir, right)) {
-                            if (0 <= x - 1 && map[x - 1][y] != '#' && map[x - 1][y] != '*') {
-                                robot_i_points.add(1, new int[]{x, y});
-                                robot_i_points.add(1, new int[]{x - 1, y});
-                                robot_i_points.add(1, new int[]{x - 1, y});
-                            } else if (x + 1 < 200 && map[x + 1][y] != '#' && map[x + 1][y] != '*') {
-                                robot_i_points.add(1, new int[]{x, y});
-                                robot_i_points.add(1, new int[]{x + 1, y});
-                                robot_i_points.add(1, new int[]{x + 1, y});
-                            } else {
-                                robot_i_points.add(1, new int[]{x, y});
-                                robot_i_points.add(1, new int[]{x, y - 1});
-                                robot_i_points.add(1, new int[]{x, y - 1});
-                            }
-                        } else if (Arrays.equals(dir, stay)) {
-                            if (0 <= x - 1 && map[x - 1][y] != '#' && map[x - 1][y] != '*') {
-                                robot_i_points.add(1, new int[]{x, y});
-                                robot_i_points.add(1, new int[]{x - 1, y});
-                                robot_i_points.add(1, new int[]{x - 1, y});
-                            } else if (x + 1 < 200 && map[x + 1][y] != '#' && map[x + 1][y] != '*') {
-                                robot_i_points.add(1, new int[]{x, y});
-                                robot_i_points.add(1, new int[]{x + 1, y});
-                                robot_i_points.add(1, new int[]{x + 1, y});
-                            } else if (0 <= y - 1 && map[x][y - 1] != '#' && map[x][y - 1] != '*') {
-                                robot_i_points.add(1, new int[]{x, y});
-                                robot_i_points.add(1, new int[]{x, y - 1});
-                                robot_i_points.add(1, new int[]{x, y - 1});
-                            } else {
-                                robot_i_points.add(1, new int[]{x, y});
-                                robot_i_points.add(1, new int[]{x, y + 1});
-                                robot_i_points.add(1, new int[]{x, y + 1});
-                            }
-                        }
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
-                }
-            }
-        }
-        for (Integer idx : idxs) {
-            List<int[]> sub_path = points.remove(0);
-            sub_path.forEach(p -> robots[idx].path.addFirst(p));
-        }
-    }
-
-    private void collision_avoidance2() {
-        /**
-         * 移动方向垂直 后一个机器人停一步
-         * 移动方向相对 其中一个绕一步
-         * 移动方向相同但后一个先动 后一个停一步
-         * 移动的撞上stay的 我也stay
-         * 下一个点上是否有机器人(机器人没路径)
-         */
-        int[] up = {-1, 0};
-        int[] down = {1, 0};
-        int[] left = {0, -1};
-        int[] right = {0, 1};
-        int[] stay = {0, 0};
-        List<List<int[]>> points = new ArrayList<>();
-        List<Integer> idxs = new ArrayList<>();
-        for (int i = 0; i < robot_num; i++) {
-            if (robots[i].path.isEmpty()) {
-                continue;
-            }
-            List<int[]> p = new ArrayList<>();
-            p.add(robots[i].path.pollFirst());
-            p.add(robots[i].path.pollFirst());
-            points.add(p);
-            idxs.add(i);
-        }
-        int length = points.size();
-        for (int i = 1; i < length; i++) {
-            for (int j = 0; j < i; j++) {
-                //后机器人
-                List<int[]> a_points = points.get(i);
-                int[] a_now = a_points.get(0);
-                int[] a_next = a_points.get(1);
-                int[] a_dir = new int[]{a_next[0] - a_now[0], a_next[1] - a_now[1]};
-                //前机器人
-                List<int[]> b_points = points.get(i);
-                int[] b_now = b_points.get(0);
-                int[] b_next = b_points.get(1);
-                int[] b_dir = new int[]{b_next[0] - b_now[0], b_next[1] - b_now[1]};
-                if (Arrays.equals(a_dir, stay) && Arrays.equals(a_next, b_next)) {
-                    //a静止且b下一步将要到达
-                    b_points.add(0, b_now);
-                } else if (Arrays.equals(b_dir, stay) && Arrays.equals(b_next, a_next)) {
-                    //b静止且a下一步将要到达
-                    a_points.add(0, a_now);
-                } else if (!Arrays.equals(a_dir, stay) && !Arrays.equals(b_dir, stay)) {
-                    //两个都有动作
-                    int multi = a_dir[0] * b_dir[0] + a_dir[1] * b_dir[1];
-                    if (multi == 0 && (Arrays.equals(a_next, b_next) || Arrays.equals(b_next, a_now))) {
-                        //移动方向垂直 且先走的机器人走到后走机器人身上 前一个机器人停一步
-                        b_points.add(0, b_now);
-                    }
-                    if (multi == -1 && Arrays.equals(a_next, b_next)) {
-                        //移动方向相对 其中一个绕一步
-                        if (Arrays.equals(a_dir, left) || Arrays.equals(a_dir, right)) {
-
-                        }
-                    }
-                }
-            }
-        }
-        for (Integer idx : idxs) {
-            List<int[]> sub_path = points.remove(0);
-            sub_path.forEach(p -> robots[idx].path.addFirst(p));
-        }
-    }
-
     private void boatPlan(int zhen, StringBuilder msg) {
         for (int i = 0; i < boat_num; i++) {
             if (boat[i].pos == -1 && boat[i].status == 1) {
@@ -624,7 +457,7 @@ public class Main {
                             }
                             //挑选泊位
                             int load_time = Math.min(berth[j].goods_num, boat[i].remain_capacity) / berth[j].loading_speed;
-                            if (zhen + 500 + berth[j].transport_time + load_time >= 15000) {
+                            if (zhen + 700 + berth[j].transport_time + load_time >= 15000) {
                                 //回不到虚拟点，放弃选择该泊位
                                 continue;
                             }
@@ -676,6 +509,118 @@ public class Main {
 //        }
     }
 
+    private void boatPlanValue(int zhen, StringBuilder msg) {
+        for (int i = 0; i < boat_num; i++) {
+            if (boat[i].pos == -1 && boat[i].status == 1) {
+                //空闲轮船
+                int max_val = -1;
+                int max_idx = 0;
+                for (int j = 0; j < berth_num; j++) {
+                    int val = berth[j].goods_num >= boat_capacity ? getFirstNVal(berth[j], boat_capacity) : berth[j].total_val;
+                    if (val > max_val) {
+                        max_val = val;
+                        max_idx = j;
+                    }
+                }
+                System.out.printf("ship %d %d" + System.lineSeparator(), i, max_idx);
+                //更新港口及轮船信息
+                if (berth[max_idx].goods_num >= boat_capacity) {
+                    boat[i].num = boat_capacity;
+                    boat[i].remain_capacity = 0;
+                    berth[max_idx].goods_num -= boat_capacity;
+                    berth[max_idx].total_val -= max_val;
+                    removeFirstNGoods(berth[max_idx],boat_capacity);
+                } else {
+                    boat[i].num = berth[max_idx].goods_num;
+                    boat[i].remain_capacity -= berth[max_idx].goods_num;
+                    berth[max_idx].goods_num = 0;
+                    berth[max_idx].total_val = 0;
+                    removeFirstNGoods(berth[max_idx],berth[max_idx].goods_num);
+                }
+            } else if (boat[i].pos != -1 && boat[i].status == 1) {
+                //轮船已经到达泊口
+                if (boat[i].arrived_time < 0) {
+                    boat[i].arrived_time = zhen;
+                }
+                int berth_id = boat[i].pos;
+                int time = zhen - boat[i].arrived_time;
+                int load_num = time * berth[berth_id].loading_speed;
+                if (load_num >= boat[i].num) {
+                    //货物装完，轮船走
+                    //余量较多，去别的泊位
+                    if (boat[i].remain_capacity > 15) {
+                        int max_val = -1;
+                        int max_idx = -1;
+                        for (int j = 0; j < berth_num; j++) {
+                            //挑选泊位
+                            int load_time = Math.min(berth[j].goods_num, boat[i].remain_capacity) / berth[j].loading_speed;
+                            if (zhen + 700 + berth[j].transport_time + load_time >= 15000) {
+                                //回不到虚拟点，放弃选择该泊位
+                                continue;
+                            }
+                            int val = berth[j].goods_num >= boat[i].remain_capacity ? getFirstNVal(berth[j], boat[i].remain_capacity) : berth[j].total_val;
+                            if (val > max_val) {
+                                max_val = val;
+                                max_idx = j;
+                            }
+                        }
+                        if (max_idx != -1) {
+                            //下一轮时间足够返回
+                            System.out.printf("ship %d %d" + System.lineSeparator(), i, max_idx);
+                            //更新港口及轮船信息
+                            if (berth[max_idx].goods_num >= boat[i].remain_capacity) {
+                                boat[i].num = boat[i].remain_capacity;
+                                boat[i].remain_capacity = 0;
+                                berth[max_idx].goods_num -= boat[i].remain_capacity;
+                                berth[max_idx].total_val -= max_val;
+                                removeFirstNGoods(berth[max_idx],boat[i].remain_capacity);
+                            } else {
+                                boat[i].num = berth[max_idx].goods_num;
+                                boat[i].remain_capacity -= berth[max_idx].goods_num;
+                                berth[max_idx].goods_num = 0;
+                                berth[max_idx].total_val = 0;
+                                removeFirstNGoods(berth[max_idx],berth[max_idx].goods_num);
+                            }
+                        } else {
+                            //下一轮时间不够返回
+                            System.out.printf("go %d" + System.lineSeparator(), i);
+                            boat[i].arrived_time = -1;
+                            boat[i].remain_capacity = boat_capacity;
+                        }
+                    } else {
+                        //余量较少，去虚拟点
+                        System.out.printf("go %d" + System.lineSeparator(), i);
+                        boat[i].arrived_time = -1;
+                        boat[i].remain_capacity = boat_capacity;
+                    }
+                    boat[i].arrived_time = -1;
+                }
+            }
+            //行驶中的轮船不做处理
+        }
+    }
+
+    private int getFirstNVal(Berth berth, int n) {
+        if (berth.goods_num < n) {
+            return -1;
+        }
+        int value = 0;
+        Iterator<Good> iterator = berth.gds.iterator();
+        for (int i = 0; i < n; i++) {
+            Good next = iterator.next();
+            value += next.val;
+        }
+        return value;
+    }
+
+    private void removeFirstNGoods(Berth berth, int n) {
+        if (berth.goods_num < n) {
+            return;
+        }
+        for (int i = 0; i < n; i++) {
+            berth.gds.poll();
+        }
+    }
 
     public static void main(String[] args) {
         Main mainInstance = new Main();
@@ -684,6 +629,7 @@ public class Main {
         Arrays.fill(semaphore, true);
 
         for (int zhen = 1; zhen <= 15000; zhen++) {
+            long start1 = System.currentTimeMillis();
             //更新货物left time
             if (!mainInstance.gds.isEmpty()) {
                 for (Good gd : mainInstance.gds) {
@@ -710,7 +656,7 @@ public class Main {
 //                    int z = zhen;
 //                    //创建子进程，处理路径规划问题
 //                    mainInstance.executor.execute(() -> {
-//                        if (z < 200) {
+//                        if (z < 150) {
 //                            mainInstance.robot2Berth(mainInstance.robots[idx]);
 //                        } else {
 //                            mainInstance.robotPlan(mainInstance.robots[idx], mainInstance.msg);
@@ -719,32 +665,84 @@ public class Main {
 //                    });
 //                }
 //            }
+            //机器人调度,主线程算5个robot，子线程算5个robot
+//            for (int i = 0; i < robot_num; i++) {
+//                if (!mainInstance.robots[i].path.isEmpty()) {
+//                    mainInstance.getRobotsCmd(mainInstance.robots[i], i, mainInstance.msg);
+//                } else {
+//                    if (i < 5) {
+//                        if (zhen < 150) {
+//                            mainInstance.robot2Berth(mainInstance.robots[i]);
+//                        } else {
+//                            mainInstance.robotPlan(mainInstance.robots[i], mainInstance.msg);
+//                        }
+//                    } else {
+//                        if (!semaphore[i]) {
+//                            continue;
+//                        }
+//                        semaphore[i] = false;
+//                        int idx = i;
+//                        int z = zhen;
+//                        //创建子进程，处理路径规划问题
+//                        mainInstance.executor.execute(() -> {
+//                            if (z < 150) {
+//                                mainInstance.robot2Berth(mainInstance.robots[idx]);
+//                            } else {
+//                                mainInstance.robotPlan(mainInstance.robots[idx], mainInstance.msg);
+//                            }
+//                            semaphore[idx] = true;
+//                        });
+//                    }
+//                }
+//            }
             //机器人调度,单线程
             for (int i = 0; i < robot_num; i++) {
                 if (mainInstance.robots[i].path.isEmpty()) {
-                    if (zhen < 200) {
+                    if (zhen < 100) {
                         mainInstance.robot2Berth(mainInstance.robots[i]);
                     } else {
                         mainInstance.robotPlan(mainInstance.robots[i], mainInstance.msg);
                     }
                 }
-                if (!mainInstance.robots[i].path.isEmpty()){
+                if (!mainInstance.robots[i].path.isEmpty()) {
                     mainInstance.getRobotsCmd(mainInstance.robots[i], i, mainInstance.msg);
                 }
             }
             //轮船调度
-            if (zhen >= 1000) {
+            if (zhen >= 3000) {
                 mainInstance.boatPlan(zhen, mainInstance.msg);
             }
+//            long end1 = System.currentTimeMillis();
+//            long rest_time = 14 - (end1 - start1);
 //            try {
 //                Thread.sleep(10);
 //            } catch (InterruptedException e) {
 //                throw new RuntimeException(e);
 //            }
+            //主进程等待解决跳帧问题
+//            long start2 = System.currentTimeMillis();
+//            while (true) {
+//                long now = System.currentTimeMillis();
+//                if (now - start2 > rest_time){
+//                    break;
+//                }
+//            }
             System.out.println("OK");
             System.out.flush();
             //测试：
-//            if (zhen == 5000) {
+//            if (zhen == 14500) {
+//                for (int i = 0; i < 10; i++) {
+//                    mainInstance.msg.append("robot:" + i);
+//                    mainInstance.msg.append("  inBerth:" + mainInstance.inBerth(mainInstance.robots[i]));
+//                    mainInstance.msg.append("  goods:" + mainInstance.robots[i].goods);
+//                    mainInstance.msg.append("  goal:" + mainInstance.robots[i].goal);
+//                    mainInstance.msg.append("  goal_dist:" + mainInstance.robots[i].goal_dist);
+//                    mainInstance.msg.append("  path:");
+//                    for (int[] ints : mainInstance.robots[i].path) {
+//                        mainInstance.msg.append(" " + Arrays.toString(ints));
+//                    }
+//                    mainInstance.msg.append("\n");
+//                }
 //                throw new RuntimeException(mainInstance.msg.toString());
 //            }
         }
@@ -755,28 +753,20 @@ public class Main {
         int status;
         int mbx, mby;
         boolean arrived;
-
-        Deque<int[]> path;
-        Deque<int[]> back_path;
-
-        Deque<Character> path_mark;
-
-        int[] goal;
-        int goal_dist;
+        Deque<int[]> path = new LinkedList<>();
+        Deque<Character> path_mark = new LinkedList<>();
+        int[] goal = new int[]{-1, -1};
+        int goal_dist = 300;
+        Good carry = null;
 
         public Robot() {
-            this.path = new LinkedList<>();
-            this.back_path = new LinkedList<>();
-            this.path_mark = new LinkedList<>();
-            this.goal = new int[]{-1, -1};
-            this.goal_dist = 300;
+
         }
 
         public Robot(int startX, int startY) {
             this.x = startX;
             this.y = startY;
             this.path = new LinkedList<>();
-            this.back_path = new LinkedList<>();
             this.path_mark = new LinkedList<>();
         }
     }
@@ -786,9 +776,10 @@ public class Main {
         int y;
         int transport_time;
         int loading_speed;
-        int goods_num;
-
-        boolean free;
+        int goods_num = 0;
+        Queue<Good> gds = new LinkedList<>();
+        int total_val = 0;
+        boolean free = true;
 
 
         public Berth() {
@@ -799,12 +790,13 @@ public class Main {
             this.y = y;
             this.transport_time = transport_time;
             this.loading_speed = loading_speed;
-            this.goods_num = 0;
-            this.free = true;
         }
     }
 
     class Boat {
+        /**
+         * 每次到泊口要运输的数量
+         */
         int num;
         /**
          * 表示目标泊位，如果目标泊位是虚拟点，则为-1
@@ -816,14 +808,11 @@ public class Main {
          * <p> 2 表示泊位外等待状态
          */
         int status;
-
-        int arrived_time;
-        int remain_capacity;
+        int arrived_time = -1;
+        int remain_capacity = boat_capacity;
 
         public Boat() {
             this.num = 0;
-            this.arrived_time = -1;
-            this.remain_capacity = boat_capacity;
         }
     }
 
